@@ -30,7 +30,7 @@ if (!$apiKey) {
 echo "✅ API Key found: " . substr($apiKey, 0, 10) . "...\n\n";
 
 // Test message
-$testPrompt = "Hello! I'm feeling a bit anxious today. Can you help me?";
+$testPrompt = "I am Flavian";
 echo "📝 Test Message: \"$testPrompt\"\n\n";
 echo "⏳ Sending request to Perplexity AI...\n\n";
 
@@ -45,7 +45,7 @@ try {
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => 'You are a compassionate AI therapy assistant for a mental health support app called Peerly. Provide empathetic support and guidance.'
+                    'content' => 'You are Peerly, a compassionate AI therapy assistant for a mental health support app. Your ONLY purpose is to provide mental health support and emotional guidance. NEVER provide historical facts, definitions, or general knowledge. DO NOT search the web or provide information unrelated to mental health. If someone introduces themselves, respond warmly and ask about their feelings. Focus EXCLUSIVELY on emotional support and therapeutic guidance.'
                 ],
                 [
                     'role' => 'user',
