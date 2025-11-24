@@ -82,9 +82,9 @@ Always be warm, supportive, and encouraging. Keep responses conversational and a
     }
 
     /**
-     * Build messages array in Claude's format from previous conversation.
+     * Build messages array in Perplexity's format from previous conversation.
      */
-    private function buildClaudeMessages(array $previousMessages, string $currentPrompt): array
+    private function buildPerplexityMessages(array $previousMessages, string $currentPrompt): array
     {
         $messages = [];
 
@@ -142,9 +142,9 @@ Always be warm, supportive, and encouraging. Keep responses conversational and a
         ]);
 
         $user = $request->user();
-        $claudeKey = config('services.claude.key'); // Using same config key for now
+        $perplexityKey = config('services.perplexity.key');
 
-        if (!$claudeKey) {
+        if (!$perplexityKey) {
             return response()->json([
                 'error' => 'AI service is not configured. Please contact support.',
             ], 500);
@@ -166,43 +166,38 @@ Always be warm, supportive, and encouraging. Keep responses conversational and a
             // Check if therapist recommendation might be helpful
             $includeTherapists = $this->shouldRecommendTherapist($request->prompt, $previousMessagesArray);
 
-            // Build conversation context for Claude
-            $conversationContext = self::THERAPY_SYSTEM_PROMPT;
-            
-            // Add therapist information if needed
+            // Build system message with therapist info if needed
+            $systemMessage = self::THERAPY_SYSTEM_PROMPT;
             if ($includeTherapists) {
-                $conversationContext .= $this->getTherapistsContext();
+                $systemMessage .= $this->getTherapistsContext();
             }
-            
-            $conversationContext .= "\n\n";
-            
-            if ($request->conversation_id && !empty($previousMessagesArray)) {
-                foreach ($previousMessagesArray as $msg) {
-                    $conversationContext .= "User: " . $msg['prompt'] . "\n";
-                    $conversationContext .= "Assistant: " . $msg['response'] . "\n\n";
-                }
-            }
-            
-            // Add current user message
-            $conversationContext .= "User: " . $request->prompt . "\n\nAssistant:";
 
-            // Call Claude API
+            // Build conversation messages for Perplexity
+            $messages = $this->buildPerplexityMessages($previousMessagesArray, $request->prompt);
+            
+            // Add system message at the beginning
+            array_unshift($messages, [
+                'role' => 'system',
+                'content' => $systemMessage
+            ]);
+
+            // Call Perplexity API
             $response = Http::timeout(30)
                 ->withHeaders([
-                    'x-api-key' => $claudeKey,
-                    'anthropic-version' => '2023-06-01',
-                    'content-type' => 'application/json',
+                    'Authorization' => 'Bearer ' . $perplexityKey,
+                    'Content-Type' => 'application/json',
                 ])
-                ->post('https://api.anthropic.com/v1/messages', [
-                    'model' => 'claude-3-5-sonnet-20241022',
+                ->post('https://api.perplexity.ai/chat/completions', [
+                    'model' => 'sonar',
+                    'messages' => $messages,
                     'max_tokens' => 800,
                     'temperature' => 0.7,
-                    'system' => self::THERAPY_SYSTEM_PROMPT . ($includeTherapists ? $this->getTherapistsContext() : ''),
-                    'messages' => $this->buildClaudeMessages($previousMessagesArray, $request->prompt),
+                    'top_p' => 0.9,
+                    'stream' => false,
                 ]);
 
             if (!$response->successful()) {
-                Log::error('Claude API Error', [
+                Log::error('Perplexity API Error', [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
@@ -223,7 +218,7 @@ Always be warm, supportive, and encouraging. Keep responses conversational and a
             }
 
             $responseData = $response->json();
-            $aiContent = data_get($responseData, 'content.0.text', 'I apologize, but I was unable to generate a response. Please try again.');
+            $aiContent = data_get($responseData, 'choices.0.message.content', 'I apologize, but I was unable to generate a response. Please try again.');
 
             // Store the interaction
             $aiMessage = AIMessage::create([
@@ -232,8 +227,8 @@ Always be warm, supportive, and encouraging. Keep responses conversational and a
                 'response' => $aiContent,
                 'conversation_id' => $request->conversation_id,
                 'meta' => [
-                    'model' => 'claude-3-5-sonnet-20241022',
-                    'stop_reason' => data_get($responseData, 'stop_reason'),
+                    'model' => 'sonar',
+                    'finish_reason' => data_get($responseData, 'choices.0.finish_reason'),
                     'usage' => data_get($responseData, 'usage'),
                     'therapist_context_included' => $includeTherapists,
                 ],

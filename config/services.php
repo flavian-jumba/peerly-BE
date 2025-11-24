@@ -35,8 +35,8 @@ return [
         ],
     ],
     
-    'claude' => [
-        'key' => env('CLAUDE_API_KEY'),
+    'perplexity' => [
+        'key' => env('PERPLEXITY_API_KEY'),
     ],
 
 
